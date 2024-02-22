@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""DB Module
-"""
-
+"""Object realational mapper database """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import InvalidRequestError
+from sqlalchemy.orm.exc import NoResultFound
+from typing import TypeVar
 from user import Base, User
 
 
 class DB:
-    """DB class
-    """
+    """ Object relational mapper database """
 
     def __init__(self):
-        """Initializes a new DB instance
-        """
+        """class initializer """
         self._engine = create_engine("sqlite:///a.db", echo=False)
         Base.metadata.drop_all(self._engine)
         Base.metadata.create_all(self._engine)
@@ -24,50 +21,49 @@ class DB:
 
     @property
     def _session(self):
-        """Private memoized session method (object)
-        Never used outside DB class
-        """
+        """ Session Getter Method """
         if self.__session is None:
             DBSession = sessionmaker(bind=self._engine)
             self.__session = DBSession()
         return self.__session
 
     def add_user(self, email: str, hashed_password: str) -> User:
-        """Add new user to database
-        Returns a User object
-        """
+        """ Adds user to database and return the object added"""
         user = User(email=email, hashed_password=hashed_password)
         self._session.add(user)
         self._session.commit()
+
         return user
 
     def find_user_by(self, **kwargs) -> User:
-        """Returns first rrow found in users table
-        as filtered by methods input arguments
+        """ Finds user and return the first user
+        found in the users table based onkwargs
         """
-        user_keys = ['id', 'email', 'hashed_password', 'session_id',
-                     'reset_token']
+        if not kwargs:
+            raise InvalidRequestError
+
+        column_names = User.__table__.columns.keys()
         for key in kwargs.keys():
-            if key not in user_keys:
+            if key not in column_names:
                 raise InvalidRequestError
-        result = self._session.query(User).filter_by(**kwargs).first()
-        if result is None:
+
+        user = self._session.query(User).filter_by(**kwargs).first()
+
+        if user is None:
             raise NoResultFound
-        return result
+
+        return user
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """Use find_user_by to locate the user to update
-        Update user's attribute as passed in methods argument
-        Commit changes to database
-        Raises ValueError if argument does not correspond to user
-        attribute passed
-        """
-        user_to_update = self.find_user_by(id=user_id)
-        user_keys = ['id', 'email', 'hashed_password', 'session_id',
-                     'reset_token']
-        for key, value in kwargs.items():
-            if key in user_keys:
-                setattr(user_to_update, key, value)
-            else:
+        """ Update user information in user table"""
+        user = self.find_user_by(id=user_id)
+
+        column_names = User.__table__.columns.keys()
+        for key in kwargs.keys():
+            if key not in column_names:
                 raise ValueError
+
+        for key, value in kwargs.items():
+            setattr(user, key, value)
+
         self._session.commit()
